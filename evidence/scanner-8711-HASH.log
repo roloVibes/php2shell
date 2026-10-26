@@ -1,0 +1,89 @@
+
+    ██████╗ ██╗  ██╗███████╗██╗  ██╗    ███████╗██╗  ██╗███████╗██╗     █████╗
+   ██╔═══██╗██║  ██║██╔════╝╚██╗██╔╝    ██╔════╝██║  ██║██╔════╝██║    ██╔══██╗
+   ██║   ██║███████║█████╗   ╚███╔╝     ███████╗███████║█████╗  ██║    ███████║
+   ██║   ██║██╔══██║██╔══╝   ██╔██╗    ╚════██║██╔══██║██╔══╝  ██║    ██╔══██║
+   ╚██████╔╝██║  ██║███████╗██╔╝ ██╗   ███████║██║  ██║███████╗███████╗██║  ██║
+    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
+     CVE-2026-109618 · CVE-2026-109619 · PHP 5.4.0–8.5.11 · fixed 8.5.12/8.4.27/8.3.36/8.2.35
+
+  scanner v1.1 · stdlib only · authorized targets only
+
+========================================================================
+Target: http://127.0.0.1:8711/t.php
+========================================================================
+  [1] fingerprinting http://127.0.0.1:8711/t.php
+  {"status": 200, "php_versions": ["8.5.11"], "x_powered_by": "PHP/8.5.11", "server": null, "get_seconds": 0.014}
+  [2] HashTable amplification probe: 2500 nested empty file fields + upload-progress + PHPSESSID cookie (~0.30 MB)
+  {"what_probe": "hash_amplification", "parts": 2500, "body_bytes": 364041, "status": 200, "seconds": 0.061, "error": null, "oom": true, "memory_limit_bytes": 4194304, "oom
+    follow-up upload-progress request (stale-state check) ...
+    >>> WORKER DIED on follow-up — stale-state corruption
+  {"status": null, "seconds": 0.016, "error": "RemoteDisconnected('Remote end closed connection without response')", "phpsessid_len": null, "worker_died": true, "note": "fo
+  [3] text-field sweep skipped (HashTable probe already produced a signal)
+  [4] stale-state check skipped (no OOM observed)
+
+========================================================================
+VERDICT
+========================================================================
+  VULNERABLE — cross-request stale-state corruption observed
+  After the HashTable OOM (zend_hash.c:290), the follow-up request killed the worker. That is the CVE-2026-109619 stale-state class reproduced live: request-owned state survives the fatal and corrupts the next request. Deterministic on vulnerable builds in the lab (4/4); the fixed 8.5.12 survives every follow-up.
+  observed memory_limit: 4194304 bytes (4.0 MiB)
+  HashTable probe fatal site: zend_hash.c:290
+
+  MITIGATIONS (patching is the only complete fix — 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35):
+    * Update PHP, then restart / replace every PHP worker.
+    * memory_limit=-1 administratively (php_admin_value) — removes the
+      predictable memory-limit trigger (check no pool/dir/app restores it).
+    * session.upload_progress.enabled=0 in php.ini / FPM / server config
+      applied BEFORE request parsing — ini_set() and .user.ini are too late.
+    * PHP 8.5: fatal_error_backtraces=0 administratively.
+    * FPM: pm.max_requests=1 interrupts cross-request chains (perf cost).
+    * Edge limits on decoded request size, multipart parts, nesting depth.
+
+  Authorization reminder: probes are visible in access logs.
+  Run only on targets you own or are authorized to test.
+
+JSON FINDINGS
+{
+  "target": "http://127.0.0.1:8711/t.php",
+  "scanner_version": "1.1",
+  "verdict": "VULNERABLE \u2014 cross-request stale-state corruption observed",
+  "php_versions": [
+    "8.5.11"
+  ],
+  "version_status": "vulnerable",
+  "findings": [
+    {
+      "what": "fingerprint",
+      "status": 200,
+      "php_versions": [
+        "8.5.11"
+      ],
+      "x_powered_by": "PHP/8.5.11",
+      "server": null,
+      "get_seconds": 0.014
+    },
+    {
+      "what": "hash_probe",
+      "what_probe": "hash_amplification",
+      "parts": 2500,
+      "body_bytes": 364041,
+      "status": 200,
+      "seconds": 0.061,
+      "error": null,
+      "oom": true,
+      "memory_limit_bytes": 4194304,
+      "oom_site": "zend_hash.c:290",
+      "fatal_excerpt": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.11/Zend/zend_hash.c:290 (tried to allocate 96 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
+    },
+    {
+      "what": "hash_follow_up",
+      "status": null,
+      "seconds": 0.016,
+      "error": "RemoteDisconnected('Remote end closed connection without response')",
+      "phpsessid_len": null,
+      "worker_died": true,
+      "note": "follow-up request killed the worker after the HashTable OOM \u2014 cross-request stale-state corruption (CVE-2026-109619 class). Verified deterministic on 8.5.11 in the lab; the fixed 8.5.12 survives."
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+
+    ██████╗ ██╗  ██╗███████╗██╗  ██╗    ███████╗██╗  ██╗███████╗██╗     █████╗
+   ██╔═══██╗██║  ██║██╔════╝╚██╗██╔╝    ██╔════╝██║  ██║██╔════╝██║    ██╔══██╗
+   ██║   ██║███████║█████╗   ╚███╔╝     ███████╗███████║█████╗  ██║    ███████║
+   ██║   ██║██╔══██║██╔══╝   ██╔██╗    ╚════██║██╔══██║██╔══╝  ██║    ██╔══██║
+   ╚██████╔╝██║  ██║███████╗██╔╝ ██╗   ███████║██║  ██║███████╗███████╗██║  ██║
+    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
+     CVE-2026-109618 · CVE-2026-109619 · PHP 5.4.0–8.5.11 · fixed 8.5.12/8.4.27/8.3.36/8.2.35
+
+  scanner v1.1 · stdlib only · authorized targets only
+
+========================================================================
+Target: http://127.0.0.1:8712/t.php
+========================================================================
+  [1] fingerprinting http://127.0.0.1:8712/t.php
+  {"status": 200, "php_versions": ["8.5.12"], "x_powered_by": "PHP/8.5.12", "server": null, "get_seconds": 0.013}
+  [2] HashTable amplification probe: 2500 nested empty file fields + upload-progress + PHPSESSID cookie (~0.30 MB)
+  {"what_probe": "hash_amplification", "parts": 2500, "body_bytes": 364041, "status": 200, "seconds": 0.104, "error": null, "oom": true, "memory_limit_bytes": 4194304, "oom
+    follow-up upload-progress request (stale-state check) ...
+  {"status": 200, "seconds": 0.001, "error": null, "phpsessid_len": 32}
+  [3] text-field sweep skipped (HashTable probe already produced a signal)
+  [4] stale-state check skipped (no OOM observed)
+
+========================================================================
+VERDICT
+========================================================================
+  NOT VULNERABLE (fixed build reported; OOM deferred, not fatal)
+  The parser OOMed at zend_hash.c:244 but PHP reports ['8.5.12'] (fixed), in the fixed set. On a fixed build the OOM is deferred and recovered — no RCE. CAVEAT: a banner version cannot prove a distro build carries (or lacks) a backport; verify the actual package.
+  observed memory_limit: 4194304 bytes (4.0 MiB)
+  HashTable probe fatal site: zend_hash.c:244
+
+  Authorization reminder: probes are visible in access logs.
+  Run only on targets you own or are authorized to test.
+
+JSON FINDINGS
+{
+  "target": "http://127.0.0.1:8712/t.php",
+  "scanner_version": "1.1",
+  "verdict": "NOT VULNERABLE (fixed build reported; OOM deferred, not fatal)",
+  "php_versions": [
+    "8.5.12"
+  ],
+  "version_status": "fixed",
+  "findings": [
+    {
+      "what": "fingerprint",
+      "status": 200,
+      "php_versions": [
+        "8.5.12"
+      ],
+      "x_powered_by": "PHP/8.5.12",
+      "server": null,
+      "get_seconds": 0.013
+    },
+    {
+      "what": "hash_probe",
+      "what_probe": "hash_amplification",
+      "parts": 2500,
+      "body_bytes": 364041,
+      "status": 200,
+      "seconds": 0.104,
+      "error": null,
+      "oom": true,
+      "memory_limit_bytes": 4194304,
+      "oom_site": "zend_hash.c:244",
+      "fatal_excerpt": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.12/Zend/zend_hash.c:244 (tried to allocate 2097152 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
+    },
+    {
+      "what": "hash_follow_up",
+      "status": 200,
+      "seconds": 0.001,
+      "error": null,
+      "phpsessid_len": 32
+    }
+  ]
+}

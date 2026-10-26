@@ -1,31 +1,53 @@
+
+    ██████╗ ██╗  ██╗███████╗██╗  ██╗    ███████╗██╗  ██╗███████╗██╗     █████╗
+   ██╔═══██╗██║  ██║██╔════╝╚██╗██╔╝    ██╔════╝██║  ██║██╔════╝██║    ██╔══██╗
+   ██║   ██║███████║█████╗   ╚███╔╝     ███████╗███████║█████╗  ██║    ███████║
+   ██║   ██║██╔══██║██╔══╝   ██╔██╗    ╚════██║██╔══██║██╔══╝  ██║    ██╔══██║
+   ╚██████╔╝██║  ██║███████╗██╔╝ ██╗   ███████║██║  ██║███████╗███████╗██║  ██║
+    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
+     CVE-2026-109618 · CVE-2026-109619 · PHP 5.4.0–8.5.11 · fixed 8.5.12/8.4.27/8.3.36/8.2.35
+
+  scanner v1.1 · stdlib only · authorized targets only
+
 ========================================================================
-PHP2SHELL scanner — CVE-2026-109618 / CVE-2026-109619
 Target: http://127.0.0.1:8711/t.php
 ========================================================================
   [1] fingerprinting http://127.0.0.1:8711/t.php
   {"status": 200, "php_versions": ["8.5.11"], "x_powered_by": "PHP/8.5.11", "server": null, "get_seconds": 0.01}
-  [2] probing rfc1867 OOM (text field sweep, cap 256 MB)
+  [2] HashTable amplification probe: 2500 nested empty file fields + upload-progress + PHPSESSID cookie (~0.30 MB)
+  {"what_probe": "hash_amplification", "parts": 2500, "body_bytes": 364041, "status": 200, "seconds": 0.006, "error": null}
+    no OOM — default max_file_uploads=20 (or an edge limit) caps the amplification path, or memory_limit is above the probe
+  [3] probing rfc1867 OOM (text field sweep, cap 256 MB)
   {"status": 200, "seconds": 0.001, "body_prefix": "{\"post\":{\"f\":{\"len\":256}},\"server\":\"\\/t.php\"}"}
     POST text field 16 MB ...
-  {"step": 1, "field_mb": 16, "status": 200, "seconds": 0.011, "error": null, "oom": true, "memory_limit_bytes": 4194304, "oom_site": "~/php2shell-lab/p
-  [3] stale-state check: identical small POSTs before/after OOM
-  {"first": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "second": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "identical
+  {"step": 1, "field_mb": 16, "status": 200, "seconds": 0.012, "error": null, "oom": true, "memory_limit_bytes": 4194304, "oom_site": "rfc1867.c:632", "fatal_excerpt": "<br
+  {"first": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "second": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "identical_responses
 
 ========================================================================
 VERDICT
 ========================================================================
   VULNERABLE
-  OOM fatal fired inside the rfc1867 pre-request parser at ~/php2shell-lab/php-8.5.11/main/rfc1867.c:632; reported PHP ['8.5.11'] (vulnerable). This is the PHP2SHELL OOM-RCE path (CVE-2026-109618) on a pre-fix build.
+  OOM fatal fired inside the rfc1867 pre-request parser OOM path (rfc1867.c:632); reported PHP ['8.5.11'] (vulnerable). CVE-2026-109618 on a pre-fix build.
   observed memory_limit: 4194304 bytes (4.0 MiB)
-  fatal site: ~/php2shell-lab/php-8.5.11/main/rfc1867.c:632
   oversized POST: 16 MB, HTTP 200, 0.01s
 
-  Authorization reminder: this probe is visible in access logs.
+  MITIGATIONS (patching is the only complete fix — 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35):
+    * Update PHP, then restart / replace every PHP worker.
+    * memory_limit=-1 administratively (php_admin_value) — removes the
+      predictable memory-limit trigger (check no pool/dir/app restores it).
+    * session.upload_progress.enabled=0 in php.ini / FPM / server config
+      applied BEFORE request parsing — ini_set() and .user.ini are too late.
+    * PHP 8.5: fatal_error_backtraces=0 administratively.
+    * FPM: pm.max_requests=1 interrupts cross-request chains (perf cost).
+    * Edge limits on decoded request size, multipart parts, nesting depth.
+
+  Authorization reminder: probes are visible in access logs.
   Run only on targets you own or are authorized to test.
 
 JSON FINDINGS
 {
   "target": "http://127.0.0.1:8711/t.php",
+  "scanner_version": "1.1",
   "verdict": "VULNERABLE",
   "php_versions": [
     "8.5.11"
@@ -43,6 +65,15 @@ JSON FINDINGS
       "get_seconds": 0.01
     },
     {
+      "what": "hash_probe",
+      "what_probe": "hash_amplification",
+      "parts": 2500,
+      "body_bytes": 364041,
+      "status": 200,
+      "seconds": 0.006,
+      "error": null
+    },
+    {
       "what": "baseline_small_post",
       "status": 200,
       "seconds": 0.001,
@@ -53,11 +84,11 @@ JSON FINDINGS
       "step": 1,
       "field_mb": 16,
       "status": 200,
-      "seconds": 0.011,
+      "seconds": 0.012,
       "error": null,
       "oom": true,
       "memory_limit_bytes": 4194304,
-      "oom_site": "~/php2shell-lab/php-8.5.11/main/rfc1867.c:632",
+      "oom_site": "rfc1867.c:632",
       "fatal_excerpt": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.11/main/rfc1867.c:632 (tried to allocate 2093672 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
     },
     {
@@ -71,7 +102,7 @@ JSON FINDINGS
         "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"
       ],
       "identical_responses": true,
-      "note": "divergence after OOM = 109619 stale-state signal; identical = no cross-request contamination seen"
+      "note": "divergence after OOM = 109619 stale-state signal"
     }
   ]
 }

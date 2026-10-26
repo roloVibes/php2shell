@@ -1,0 +1,161 @@
+
+    ██████╗ ██╗  ██╗███████╗██╗  ██╗    ███████╗██╗  ██╗███████╗██╗     █████╗
+   ██╔═══██╗██║  ██║██╔════╝╚██╗██╔╝    ██╔════╝██║  ██║██╔════╝██║    ██╔══██╗
+   ██║   ██║███████║█████╗   ╚███╔╝     ███████╗███████║█████╗  ██║    ███████║
+   ██║   ██║██╔══██║██╔══╝   ██╔██╗    ╚════██║██╔══██║██╔══╝  ██║    ██╔══██║
+   ╚██████╔╝██║  ██║███████╗██╔╝ ██╗   ███████║██║  ██║███████╗███████╗██║  ██║
+    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
+     PoC lab harness · CVE-2026-109618 / CVE-2026-109619 · local builds only
+
+{
+  "R1_oom_in_parser": {
+    "8.5.11": {
+      "status": 200,
+      "in_rfc1867": true,
+      "site": {
+        "file": "rfc1867.c",
+        "line": "632",
+        "limit": 4194304
+      },
+      "sample": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.11/main/rfc1867.c:632 (tried to allocate 2093672 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
+    },
+    "8.5.12": {
+      "status": 200,
+      "in_rfc1867": true,
+      "site": {
+        "file": "rfc1867.c",
+        "line": "665",
+        "limit": 4194304
+      },
+      "sample": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.12/main/rfc1867.c:665 (tried to allocate 2097152 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
+    }
+  },
+  "R2_stale_state": {
+    "8.5.11_next_req": {
+      "post": {
+        "x": {
+          "len": 1
+        }
+      },
+      "server": "/t.php"
+    },
+    "8.5.12_next_req": {
+      "post": {
+        "x": {
+          "len": 1
+        }
+      },
+      "server": "/t.php"
+    },
+    "8.5.11_leaked_previous_post": false,
+    "note": "Negative on both: the plain $_POST path is reset by the dev server either way; the session-state corruption is R5, the ZVAL_UNDEF slot fix is R3."
+  },
+  "R5_hashtable_corruption_differential": {
+    "a_8.5.11_cookie": {
+      "probe_status": 200,
+      "oom_site": {
+        "file": "zend_hash.c",
+        "line": "290",
+        "limit": 4194304
+      },
+      "parts": 2500,
+      "body_bytes": 344025,
+      "follow_up": {
+        "status": null
+      },
+      "worker_died": true,
+      "note": "amplification: ~2500 nested empty file fields (~0.3 MB body) exhaust a 4M limit; the follow-up reaches the upload-progress path and dereferences the stale state"
+    },
+    "b_control_no_cookie": {
+      "probe_status": 200,
+      "oom_site": {
+        "file": "zend_hash.c",
+        "line": "176",
+        "limit": 4194304
+      },
+      "follow_up_status": 200,
+      "worker_died": false,
+      "note": "no session cookie -> PS(id) not published -> stale state absent -> follow-up survives"
+    },
+    "c_control_text_oom": {
+      "probe_status": 200,
+      "oom_site": {
+        "file": "rfc1867.c",
+        "line": "632",
+        "limit": 4194304
+      },
+      "follow_up_status": 200,
+      "worker_died": false,
+      "note": "text-field OOM is the body-buffer path, not the HashTable primitive -> follow-up survives"
+    },
+    "d_8.5.12_cookie": {
+      "probe_status": 200,
+      "oom_site": {
+        "file": "zend_hash.c",
+        "line": "244",
+        "limit": 4194304
+      },
+      "follow_up_statuses": [
+        200,
+        200
+      ],
+      "worker_survived": true,
+      "note": "fixed build defers the OOM; every follow-up answered normally"
+    },
+    "e_default_cap_control": {
+      "probe_status": 200,
+      "oom": false,
+      "note": "default max_file_uploads=20 caps the amplification path \u2014 the documented edge mitigation, measured"
+    }
+  },
+  "R3_fix_mechanisms_8.5.12_only": {
+    "delayed_oom_state_EG": {
+      "8.5.11": 0,
+      "8.5.12": 1
+    },
+    "ZEND_HAS_OOM_anywhere_in_Zend": {
+      "8.5.11": 0,
+      "8.5.12": 45
+    },
+    "memory_hard_limit_percent_INI": {
+      "8.5.11": 0,
+      "8.5.12": 4
+    },
+    "_exit_137_hard_limit_abort": {
+      "8.5.11": 0,
+      "8.5.12": 1
+    },
+    "ZEND_HAS_OOM_checks_in_rfc1867": {
+      "8.5.11": 0,
+      "8.5.12": 20
+    },
+    "http_globals_ZVAL_UNDEF_at_shutdown": {
+      "8.5.11": 0,
+      "8.5.12": 1
+    },
+    "modules_activated_reset_at_shutdown": {
+      "8.5.11": 1,
+      "8.5.12": 2
+    }
+  },
+  "R4_cgi_oom_exit": {
+    "8.5.11": {
+      "exit_code": 255,
+      "in_rfc1867": true,
+      "sample": "X-Powered-By: PHP/8.5.11 Content-type: text/html; charset=UTF-8 <br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.11/main/rfc1867.c:632 (tried to allocate 2093"
+    },
+    "8.5.12": {
+      "exit_code": 255,
+      "in_rfc1867": true,
+      "sample": "X-Powered-By: PHP/8.5.12 Content-type: text/html; charset=UTF-8 <br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.12/main/rfc1867.c:665 (tried to allocate 2097"
+    },
+    "note": "Both exit 255: the 8.5.12 exit-121 mapping requires the ZEND_MM_MAX_ALLOCS test hook, which is custom-heap-only and not reachable in this NTS build. Measured, not elided."
+  }
+}
+
+=== VERDICT ===
+R1  8.5.11 OOM fires in vulnerable rfc1867 pre-request parser : CONFIRMED
+R2  8.5.11 leaked previous request's $_POST on next request  : not leaked (dev server masks it; fix verified in R3)
+R3  8.5.12 fix mechanisms present & absent from 8.5.11       : CONFIRMED
+R4  CGI exit-code mapping (exit-121 unreachable in NTS)      : measured (both 255, see note)
+R5  HashTable OOM kills NEXT request on 8.5.11; all controls (no-cookie / text-OOM / 8.5.12 / default-cap) survive: CONFIRMED

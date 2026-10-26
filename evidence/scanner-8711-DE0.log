@@ -1,29 +1,52 @@
+
+    ██████╗ ██╗  ██╗███████╗██╗  ██╗    ███████╗██╗  ██╗███████╗██╗     █████╗
+   ██╔═══██╗██║  ██║██╔════╝╚██╗██╔╝    ██╔════╝██║  ██║██╔════╝██║    ██╔══██╗
+   ██║   ██║███████║█████╗   ╚███╔╝     ███████╗███████║█████╗  ██║    ███████║
+   ██║   ██║██╔══██║██╔══╝   ██╔██╗    ╚════██║██╔══██║██╔══╝  ██║    ██╔══██║
+   ╚██████╔╝██║  ██║███████╗██╔╝ ██╗   ███████║██║  ██║███████╗███████╗██║  ██║
+    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
+     CVE-2026-109618 · CVE-2026-109619 · PHP 5.4.0–8.5.11 · fixed 8.5.12/8.4.27/8.3.36/8.2.35
+
+  scanner v1.1 · stdlib only · authorized targets only
+
 ========================================================================
-PHP2SHELL scanner — CVE-2026-109618 / CVE-2026-109619
 Target: http://127.0.0.1:8711/t.php
 ========================================================================
   [1] fingerprinting http://127.0.0.1:8711/t.php
   {"status": 200, "php_versions": ["8.5.11"], "x_powered_by": "PHP/8.5.11", "server": null, "get_seconds": 0.009}
-  [2] probing rfc1867 OOM (text field sweep, cap 256 MB)
+  [2] HashTable amplification probe: 2500 nested empty file fields + upload-progress + PHPSESSID cookie (~0.30 MB)
+  {"what_probe": "hash_amplification", "parts": 2500, "body_bytes": 364041, "status": 200, "seconds": 0.005, "error": null}
+    no OOM — default max_file_uploads=20 (or an edge limit) caps the amplification path, or memory_limit is above the probe
+  [3] probing rfc1867 OOM (text field sweep, cap 256 MB)
   {"status": 200, "seconds": 0.001, "body_prefix": "{\"post\":{\"f\":{\"len\":256}},\"server\":\"\\/t.php\"}"}
     POST text field 16 MB ...
-  {"step": 1, "field_mb": 16, "status": 500, "seconds": 0.009, "error": null, "crash_signal": true, "note": "worker died on oversized POST (HTTP 500 / None) while
-  [3] stale-state check: identical small POSTs before/after OOM
-  {"first": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "second": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "identical
+  {"step": 1, "field_mb": 16, "status": 500, "seconds": 0.009, "error": null, "crash_signal": true, "note": "worker died on oversized POST while a small POST was fine (disp
+  {"first": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "second": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "identical_responses
 
 ========================================================================
 VERDICT
 ========================================================================
   LIKELY VULNERABLE (worker crashed on oversized POST; pre-fix build reported)
-  An oversized text field crashed the worker (HTTP 500 / None) while small POSTs succeeded, and PHP reports ['8.5.11'] (vulnerable) — a pre-fix build. On pre-fix 8.5.11 an rfc1867 OOM is fatal and not recovered, which is exactly this crash. (CVE-2026-109618.)
+  An oversized text field crashed the worker while small POSTs succeeded, and PHP reports ['8.5.11'] (vulnerable) — a pre-fix build. On pre-fix 8.5.11 an rfc1867 OOM is fatal and not recovered, which is exactly this crash.
   oversized POST: 16 MB, HTTP 500, 0.01s
 
-  Authorization reminder: this probe is visible in access logs.
+  MITIGATIONS (patching is the only complete fix — 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35):
+    * Update PHP, then restart / replace every PHP worker.
+    * memory_limit=-1 administratively (php_admin_value) — removes the
+      predictable memory-limit trigger (check no pool/dir/app restores it).
+    * session.upload_progress.enabled=0 in php.ini / FPM / server config
+      applied BEFORE request parsing — ini_set() and .user.ini are too late.
+    * PHP 8.5: fatal_error_backtraces=0 administratively.
+    * FPM: pm.max_requests=1 interrupts cross-request chains (perf cost).
+    * Edge limits on decoded request size, multipart parts, nesting depth.
+
+  Authorization reminder: probes are visible in access logs.
   Run only on targets you own or are authorized to test.
 
 JSON FINDINGS
 {
   "target": "http://127.0.0.1:8711/t.php",
+  "scanner_version": "1.1",
   "verdict": "LIKELY VULNERABLE (worker crashed on oversized POST; pre-fix build reported)",
   "php_versions": [
     "8.5.11"
@@ -41,6 +64,15 @@ JSON FINDINGS
       "get_seconds": 0.009
     },
     {
+      "what": "hash_probe",
+      "what_probe": "hash_amplification",
+      "parts": 2500,
+      "body_bytes": 364041,
+      "status": 200,
+      "seconds": 0.005,
+      "error": null
+    },
+    {
       "what": "baseline_small_post",
       "status": 200,
       "seconds": 0.001,
@@ -54,7 +86,7 @@ JSON FINDINGS
       "seconds": 0.009,
       "error": null,
       "crash_signal": true,
-      "note": "worker died on oversized POST (HTTP 500 / None) while a small POST was fine \u2014 consistent with an unhandled OOM fatal in the request path (CVE-2026-109618)"
+      "note": "worker died on oversized POST while a small POST was fine (display_errors=0 hides the fatal text)"
     },
     {
       "what": "stale_state_probe",
@@ -67,7 +99,7 @@ JSON FINDINGS
         "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"
       ],
       "identical_responses": true,
-      "note": "divergence after OOM = 109619 stale-state signal; identical = no cross-request contamination seen"
+      "note": "divergence after OOM = 109619 stale-state signal"
     }
   ]
 }
