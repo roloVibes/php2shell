@@ -1,0 +1,73 @@
+========================================================================
+PHP2SHELL scanner — CVE-2026-109618 / CVE-2026-109619
+Target: http://127.0.0.1:8711/t.php
+========================================================================
+  [1] fingerprinting http://127.0.0.1:8711/t.php
+  {"status": 200, "php_versions": ["8.5.11"], "x_powered_by": "PHP/8.5.11", "server": null, "get_seconds": 0.009}
+  [2] probing rfc1867 OOM (text field sweep, cap 256 MB)
+  {"status": 200, "seconds": 0.001, "body_prefix": "{\"post\":{\"f\":{\"len\":256}},\"server\":\"\\/t.php\"}"}
+    POST text field 16 MB ...
+  {"step": 1, "field_mb": 16, "status": 500, "seconds": 0.009, "error": null, "crash_signal": true, "note": "worker died on oversized POST (HTTP 500 / None) while
+  [3] stale-state check: identical small POSTs before/after OOM
+  {"first": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "second": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "identical
+
+========================================================================
+VERDICT
+========================================================================
+  LIKELY VULNERABLE (worker crashed on oversized POST; pre-fix build reported)
+  An oversized text field crashed the worker (HTTP 500 / None) while small POSTs succeeded, and PHP reports ['8.5.11'] (vulnerable) — a pre-fix build. On pre-fix 8.5.11 an rfc1867 OOM is fatal and not recovered, which is exactly this crash. (CVE-2026-109618.)
+  oversized POST: 16 MB, HTTP 500, 0.01s
+
+  Authorization reminder: this probe is visible in access logs.
+  Run only on targets you own or are authorized to test.
+
+JSON FINDINGS
+{
+  "target": "http://127.0.0.1:8711/t.php",
+  "verdict": "LIKELY VULNERABLE (worker crashed on oversized POST; pre-fix build reported)",
+  "php_versions": [
+    "8.5.11"
+  ],
+  "version_status": "vulnerable",
+  "findings": [
+    {
+      "what": "fingerprint",
+      "status": 200,
+      "php_versions": [
+        "8.5.11"
+      ],
+      "x_powered_by": "PHP/8.5.11",
+      "server": null,
+      "get_seconds": 0.009
+    },
+    {
+      "what": "baseline_small_post",
+      "status": 200,
+      "seconds": 0.001,
+      "body_prefix": "{\"post\":{\"f\":{\"len\":256}},\"server\":\"\\/t.php\"}"
+    },
+    {
+      "what": "oom_crash_signal",
+      "step": 1,
+      "field_mb": 16,
+      "status": 500,
+      "seconds": 0.009,
+      "error": null,
+      "crash_signal": true,
+      "note": "worker died on oversized POST (HTTP 500 / None) while a small POST was fine \u2014 consistent with an unhandled OOM fatal in the request path (CVE-2026-109618)"
+    },
+    {
+      "what": "stale_state_probe",
+      "first": [
+        200,
+        "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"
+      ],
+      "second": [
+        200,
+        "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"
+      ],
+      "identical_responses": true,
+      "note": "divergence after OOM = 109619 stale-state signal; identical = no cross-request contamination seen"
+    }
+  ]
+}

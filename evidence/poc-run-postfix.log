@@ -1,0 +1,82 @@
+{
+  "R1_oom_in_parser": {
+    "8.5.11": {
+      "status": 200,
+      "in_rfc1867": true,
+      "sample": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.11/main/rfc1867.c:632 (tried to allocate 2093672 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
+    },
+    "8.5.12": {
+      "status": 200,
+      "in_rfc1867": true,
+      "sample": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.12/main/rfc1867.c:665 (tried to allocate 2097152 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
+    }
+  },
+  "R2_stale_state": {
+    "8.5.11_next_req": {
+      "post": {
+        "x": {
+          "len": 1
+        }
+      },
+      "server": "/t.php"
+    },
+    "8.5.12_next_req": {
+      "post": {
+        "x": {
+          "len": 1
+        }
+      },
+      "server": "/t.php"
+    },
+    "8.5.11_leaked_previous_post": false,
+    "note": "Negative on both: dev server tears down the request either way; the 109619 slot-UNDEF fix is verified in R3 (source), which is where the fix lives."
+  },
+  "R3_fix_mechanisms_8.5.12_only": {
+    "delayed_oom_state_EG": {
+      "8.5.11": 0,
+      "8.5.12": 1
+    },
+    "ZEND_HAS_OOM_anywhere_in_Zend": {
+      "8.5.11": 0,
+      "8.5.12": 45
+    },
+    "memory_hard_limit_percent_INI": {
+      "8.5.11": 0,
+      "8.5.12": 4
+    },
+    "_exit_137_hard_limit_abort": {
+      "8.5.11": 0,
+      "8.5.12": 1
+    },
+    "ZEND_HAS_OOM_checks_in_rfc1867": {
+      "8.5.11": 0,
+      "8.5.12": 20
+    },
+    "http_globals_ZVAL_UNDEF_at_shutdown": {
+      "8.5.11": 0,
+      "8.5.12": 1
+    },
+    "modules_activated_reset_at_shutdown": {
+      "8.5.11": 1,
+      "8.5.12": 2
+    }
+  },
+  "R4_cgi_oom_exit": {
+    "8.5.11": {
+      "exit_code": 255,
+      "in_rfc1867": true,
+      "sample": "X-Powered-By: PHP/8.5.11 Content-type: text/html; charset=UTF-8 <br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.11/main/rfc1867.c:632 (tried to allocate 2093"
+    },
+    "8.5.12": {
+      "exit_code": 255,
+      "in_rfc1867": true,
+      "sample": "X-Powered-By: PHP/8.5.12 Content-type: text/html; charset=UTF-8 <br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.12/main/rfc1867.c:665 (tried to allocate 2097"
+    },
+    "note": "Both exit 255: the 8.5.12 exit-121 mapping requires the ZEND_MM_MAX_ALLOCS test hook, which is custom-heap-only and not reachable in this NTS build. Measured, not elided."
+  }
+}
+
+=== VERDICT ===
+R1  8.5.11 OOM fires in vulnerable rfc1867 pre-request parser : CONFIRMED
+R2  8.5.11 leaked previous request's $_POST on next request  : not leaked (dev server masks it; fix verified in R3)
+R3  8.5.12 fix mechanisms present & absent from 8.5.11       : CONFIRMED

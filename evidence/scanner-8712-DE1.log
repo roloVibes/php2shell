@@ -1,0 +1,77 @@
+========================================================================
+PHP2SHELL scanner — CVE-2026-109618 / CVE-2026-109619
+Target: http://127.0.0.1:8712/t.php
+========================================================================
+  [1] fingerprinting http://127.0.0.1:8712/t.php
+  {"status": 200, "php_versions": ["8.5.12"], "x_powered_by": "PHP/8.5.12", "server": null, "get_seconds": 0.009}
+  [2] probing rfc1867 OOM (text field sweep, cap 256 MB)
+  {"status": 200, "seconds": 0.001, "body_prefix": "{\"post\":{\"f\":{\"len\":256}},\"server\":\"\\/t.php\"}"}
+    POST text field 16 MB ...
+  {"step": 1, "field_mb": 16, "status": 200, "seconds": 0.012, "error": null, "oom": true, "memory_limit_bytes": 4194304, "oom_site": "~/php2shell-lab/p
+  [3] stale-state check: identical small POSTs before/after OOM
+  {"first": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "second": [200, "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"], "identical
+
+========================================================================
+VERDICT
+========================================================================
+  NOT VULNERABLE (fixed build reported; OOM deferred, not fatal)
+  The parser OOMed at ~/php2shell-lab/php-8.5.12/main/rfc1867.c:665 but PHP reports ['8.5.12'] (fixed), which is in the fixed set (8.5.12+). On a fixed build the rfc1867 OOM is deferred and recovered, not fatal — no RCE. If the version string looks wrong, treat as unverified.
+  observed memory_limit: 4194304 bytes (4.0 MiB)
+  fatal site: ~/php2shell-lab/php-8.5.12/main/rfc1867.c:665
+  oversized POST: 16 MB, HTTP 200, 0.01s
+
+  Authorization reminder: this probe is visible in access logs.
+  Run only on targets you own or are authorized to test.
+
+JSON FINDINGS
+{
+  "target": "http://127.0.0.1:8712/t.php",
+  "verdict": "NOT VULNERABLE (fixed build reported; OOM deferred, not fatal)",
+  "php_versions": [
+    "8.5.12"
+  ],
+  "version_status": "fixed",
+  "findings": [
+    {
+      "what": "fingerprint",
+      "status": 200,
+      "php_versions": [
+        "8.5.12"
+      ],
+      "x_powered_by": "PHP/8.5.12",
+      "server": null,
+      "get_seconds": 0.009
+    },
+    {
+      "what": "baseline_small_post",
+      "status": 200,
+      "seconds": 0.001,
+      "body_prefix": "{\"post\":{\"f\":{\"len\":256}},\"server\":\"\\/t.php\"}"
+    },
+    {
+      "what": "oom_fatal_observed",
+      "step": 1,
+      "field_mb": 16,
+      "status": 200,
+      "seconds": 0.012,
+      "error": null,
+      "oom": true,
+      "memory_limit_bytes": 4194304,
+      "oom_site": "~/php2shell-lab/php-8.5.12/main/rfc1867.c:665",
+      "fatal_excerpt": "<br /> <b>Fatal error</b>: Allowed memory size of 4194304 bytes exhausted at ~/php2shell-lab/php-8.5.12/main/rfc1867.c:665 (tried to allocate 2097152 bytes) in <b>Unknown</b> on line <b>0</b><br /> "
+    },
+    {
+      "what": "stale_state_probe",
+      "first": [
+        200,
+        "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"
+      ],
+      "second": [
+        200,
+        "{\"post\":{\"x\":{\"len\":1}},\"server\":\"\\/t.php\"}"
+      ],
+      "identical_responses": true,
+      "note": "divergence after OOM = 109619 stale-state signal; identical = no cross-request contamination seen"
+    }
+  ]
+}
